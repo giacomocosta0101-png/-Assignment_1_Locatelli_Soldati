@@ -123,8 +123,8 @@ def bootstrap(
         depo (pd.DataFrame): Deposit rates.
         futures (pd.DataFrame): Futures rates.
         swaps (pd.DataFrame): Swaps rates.
-        shock (Union[float, pd.Series]): Parallel shift to apply to the market rates, default to
-            zero.
+        shock (Union[float, pd.Series]): Shift to apply to the market rates in decimal (e.g. 1e-4 = 1bp).
+            Default to zero.
 
     Returns:
         pd.Series: Discount factors.
@@ -144,12 +144,11 @@ def bootstrap(
     # We make an array of the depo rates needed 
     depoRates = depo.loc[depoDates].mean(axis=1).values 
 
-    # needed for the bumped bootstrap: if shock is a float, shift all the mkt data by that number, otherwise for each pillar its value
-    depoRates = depoRates +  ( shock if isinstance(shock, float) else shock[depoDates].values )
-
-    # We convert the deporates in decimal values
-
+    # We convert the deporates in decimal values FIRST
     depoRates = depoRates / 100.0
+
+    # THEN apply the shock (already in decimal: 1e-4 = 1bp)
+    depoRates = depoRates + (shock if isinstance(shock, float) else shock[depoDates].values)
 
     # convert rate L(t0,ti) to discount B(t0,ti) and append the results to the current list of dates and discounts
     
@@ -186,10 +185,10 @@ def bootstrap(
     Prices = futures.loc[future_dates,['BID','ASK']].mean(axis=1).values 
     
     # Futures price = 100 - fwd rate → fwd rate = (100 - Price) / 100
-    fwdRates = (100 -Prices)/100
+    fwdRates = (100 - Prices) / 100
     
-    # We apply the shock and convert to decimal (shock is divided by 100 here, unlike depos)
-    fwdRates = fwdRates + (shock / 100.0 if isinstance(shock, float) else shock[future_dates].values / 100.0)
+    # Apply the shock directly (already in decimal, no /100)
+    fwdRates = fwdRates + (shock if isinstance(shock, float) else shock[future_dates].values)
 
     y_fr_future = [year_frac_act_x(fut_set, fut_ex, 360) for fut_set, fut_ex in zip(future_settle,future_expiry)]
     
@@ -229,12 +228,11 @@ def bootstrap(
     swapDate = swaps_to_bootstrap.index[0] # We initialize the list
     spot_date = reference_date #The reference date is already the settlement date
 
-    swapRates = swaps_to_bootstrap.mean(axis=1).values + (
-        shock if isinstance(shock, float) else shock[swaps_to_bootstrap.index].values
-    )
+    # Convert to decimal FIRST
+    swapRates = swaps_to_bootstrap.mean(axis=1).values / 100.0
 
-    # We convert the rates in decimal values
-    swapRates=swapRates/100
+    # THEN apply the shock (already in decimal: 1e-4 = 1bp)
+    swapRates = swapRates + (shock if isinstance(shock, float) else shock[swaps_to_bootstrap.index].values)
 
     # We make a cycle on the swaps:
     # enumerate returns both the index and the value of each element in the iterable,
